@@ -1,0 +1,351 @@
+---
+title: "2501975684_FinalExam"
+author: "2501975684_Arvio Anandi"
+date: '2022-07-15'
+output:
+  html_document: default
+  pdf_document: default
+---
+
+Link Video: https://drive.google.com/file/d/1ueQYvtKdnfnxbJr-5ptv8U89bDjBGf-z/view?usp=sharing
+
+# The purpose of this logistic regression is to predict patient's chance of getting a stroke contingent to the independent variables conditioned.
+```{r}
+library(ROCR)
+library(rpart)
+library(rpart.plot)
+library(dplyr)
+library(ggplot2)
+library(ggthemes)
+data <- read.csv("StrokeData.csv")
+```
+__EXPLANATION__  
+Loading packages and datasets.
+
+```{r}
+head(data)
+```
+__EXPLANATION__  
+Table shows head of the dataset.
+```{r}
+dim(data)
+```
+__EXPLANATION__  
+There is a total number of 5110 records and 12 features.
+
+```{r}
+str(data)
+```
+
+__EXPLANATION__  
+Features Information  
+1.) id (integer): unique identifier  
+2.) gender (character): "Male", "Female" or "Other"  
+3) age (numeric): age of the patient  
+4) hypertension (integer): 0 if the patient doesn't have hypertension, 1 if the patient has hypertension  
+5) heart_disease (integer): 0 if the patient doesn't have any heart diseases, 1 if the patient has a heart disease  
+6) ever_married (character): "No" or "Yes"   
+7) work_type (character): "children", "Govt_jov", "Never_worked", "Private" or "Self-employed"  
+8) Residence_type (character): "Rural" or "Urban"  
+9) avg_glucose_level (numeric): average glucose level in blood  
+10) bmi (character): body mass index  
+11) smoking_status (character): "formerly smoked", "never smoked", "smokes" or "Unknown"  
+12) stroke (integer): 1 if the patient had a stroke or 0 if not  
+*Note: "Unknown" in smoking_status means that the information is unavailable for this patient  
+
+```{r}
+length(data[data=="?"])
+```
+__EXPLANATION__  
+There are no levels with the label "?" in this dataset.
+```{r}
+data$gender <- as.factor(data$gender)
+data$ever_married <- as.factor(data$ever_married)
+data$work_type <- as.factor(data$work_type)
+data$Residence_type <- as.factor(data$Residence_type)
+data$bmi <- as.numeric(data$bmi)
+data$smoking_status <- as.factor(data$smoking_status)
+data$stroke <- as.factor(data$stroke)
+data$heart_disease <- as.factor(data$heart_disease)
+data$hypertension <- as.factor(data$hypertension)
+str(data)
+```
+__EXPLANATION__  
+We convert data types according to each of its types. e.g gender from character to factor.
+
+
+```{r}
+sapply(data, function(x) sum(is.na(x)))
+```
+__EXPLANATION__  
+- Only BMI feature has missing values  
+- BMI has 201 records with missing values
+
+# Checking for assumptions
+```{r}
+t <- ggplot(data, aes(id,fill = stroke))
+t <- t + geom_histogram(stat="count")
+print(t)
+```
+__EXPLANATION__  
+Since there is too much unique values which are random and it shows that id and stroke have no correlation in real life, then it is better to remove id as independent variable.
+
+```{r}
+t <- ggplot(data, aes(gender,fill = stroke))
+t <- t + geom_histogram(stat="count")
+print(t)
+```
+__EXPLANATION__  
+Gender characteristic doesn't have so much significance.
+
+
+```{r}
+t <- ggplot(data, aes(age,fill = stroke))
+t <- t + geom_histogram(stat="count")
+print(t)
+```
+__EXPLANATION__  
+We can say that people of age > 40 is prone to having stroke.
+
+```{r}
+t <- ggplot(data, aes(hypertension,fill = stroke))
+t <- t + geom_histogram(stat="count")
+print(t)
+```
+__EXPLANATION__  
+It seems that hypertension has an effect on chance of getting stroke within a small proportion.
+
+```{r}
+t <- ggplot(data, aes(heart_disease,fill = stroke))
+t <- t + geom_histogram(stat="count")
+print(t)
+```
+__EXPLANATION__  
+1. People with heart disease have more tendencies of having a stroke.  
+2. People with no heart disease have less tendencies of having a stroke.
+
+```{r}
+t <- ggplot(data, aes(ever_married,fill = stroke))
+t <- t + geom_histogram(stat="count")
+print(t)
+```
+__EXPLANATION__  
+People who ever married have more probability to have stroke compared to people who never married.
+```{r}
+t <- ggplot(data, aes(work_type,fill = stroke))
+t <- t + geom_histogram(stat="count")
+print(t)
+```
+__EXPLANATION__  
+
+1. People with self-employed jobs have the most probability of getting a stroke from all the work types.  
+2. Children have the least probability of getting a stroke.
+
+```{r}
+t <- ggplot(data, aes(Residence_type,fill = stroke))
+t <- t + geom_histogram(stat="count")
+print(t)
+```
+
+__EXPLANATION__  
+There isn't anything important to interpret from residence type.
+
+```{r}
+t <- ggplot(data, aes(avg_glucose_level,fill = stroke))
+t <- t + geom_histogram(stat="count")
+print(t)
+```
+__EXPLANATION__  
+Average glucose level distribution is random.
+
+```{r}
+t <- ggplot(data, aes(bmi,fill = stroke))
+t <- t + geom_histogram(stat="count")
+print(t)
+```
+__EXPLANATION__  
+People ranging within 15 to 50 of BMI tend to have stroke compared to other intervals.
+
+```{r}
+t <- ggplot(data, aes(smoking_status,fill = stroke))
+t <- t + geom_histogram(stat="count")
+print(t)
+```
+__EXPLANATION__  
+1. People who smoke have more probability of getting a stroke.  
+2. People who never smoked have the least probability of getting a stroke than the other labels.
+
+
+```{r}
+sapply(data, function(x) length(unique(x)))
+```
+__EXPLANATION__  
+We can deduct:  
+- Feature Id should be removed because there is no correlation between the label with probability of having a stroke.  
+- We can fit the rest of the features to our model.
+
+## Data preparation
+```{r}
+data$id <- NULL
+sapply(data, function(x) sum(is.na(x)))
+```
+__EXPLANATION__  
+We remove id variable from the dataset as it is not needed.
+```{r}
+data$bmi[is.na(data$bmi)] <- mean(data$bmi, na.rm=T)
+sapply(data, function(x) sum(is.na(x)))
+```
+__EXPLANATION__  
+We handle the missing values for bmi feature by changing it to mean of the feature.
+
+# Verifying imbalances in dataset
+```{r}
+xtabs(~ stroke + gender, data=data)
+xtabs(~ stroke + age , data=data)
+xtabs(~ stroke + hypertension, data=data)
+xtabs(~ stroke +  heart_disease, data=data)
+xtabs(~ stroke +  ever_married, data=data)
+xtabs(~ stroke +  work_type, data=data)
+xtabs(~ stroke +  Residence_type, data=data)
+xtabs(~ stroke +  avg_glucose_level, data=data)
+xtabs(~ stroke +  smoking_status, data=data)
+```
+__EXPLANATION__  
+From the table of frequencies it is shown that each of the variables are all represented by a number of people or can be said as balanced.
+
+
+# Splitting data to train and validation sets
+```{r}
+sample = floor(0.8*nrow(data))
+
+set.seed(800)
+rand = sample(seq_len(nrow(data)),size = sample)
+train = data[rand,]
+validation = data[-rand,]
+```
+__EXPLANATION__  
+We split the training set to accomodate 80% of the data, while the validation set accomodating 20%.
+
+## Logistic Regression
+```{r}
+logistics <- glm(stroke ~ .,family = binomial(link = "logit"), data = train)
+summary(logistics)
+```
+__EXPLANATION__  
+From model 1, we can conduct:  
+1.) It can be seen that the predictor variable age have a p-value < 0.0001. This means that these variables are highly statistically significant predictors in the model.  
+2.) From subtracting the residual deviance to null deviance, we get the chi-square of 327 with df of 16, resulting with p-value of 0.0000. This tells us that the model is highly useful.  
+3.) We move on with another model with age as a highly statistically significant predictor variable.  
+```{r}
+logistics <- glm(stroke ~ age,family = binomial(link = "logit"), data = train)
+summary(logistics)
+```
+__EXPLANATION__  
+From model 2, we can conduct:  
+1.) The predictor variable age has a very high statistical significance with stroke variable.  
+2.) With chi-square value of 293.8 with df of 1, we get p-value of 0.000000. This shows that the model is as useful as the first model.  
+3.) The AIC shows slightly higher difference in value as compared to the first model, but this doesn't matter as it fits as the best model.  
+4.) We will proceed with building a model of this regression.  
+
+```{r}
+predicted.data <- data.frame(prob = data$stroke, age = data$age, fit = predict(logistics,data))
+predicted.data$fit_prob <- 1+ exp(predicted.data$fit+1.4)/(1+exp(predicted.data$fit))
+ggplot(data=predicted.data, aes(x=age,y=prob))+
+  geom_point(aes(color=age),alpha=1,shape=1,stroke=2)+
+  geom_line(aes(x=age,y=fit_prob))
+``` 
+__EXPLANATION__  
+1.) Most of the people with stroke cumulates between the age 40 - 80.
+2,) People without stroke ranges from age 0 - 80.
+3.) The prediction curve predicts people without stroke having low probability of getting a stroke.
+4.) The prediction curve tends to have many residuals when predicting people with stroke of having a high probability of getting a stroke.
+
+
+
+# Evaluation
+```{r}
+prob <- predict(logistics, newdata=subset(validation, select = c(1,2,3,4,5,6,7,8,9,10)), type="response")
+prdt <- prediction(prob, validation$stroke)
+rocCurve <- performance(prdt, measure = "tpr", x.measure = "fpr")
+plot(rocCurve)
+```
+__EXPLANATION__  
+The ROC Curve line curves closer to the top-left. This indicates that the model does a good job classifying between the two categories which comprise to the target variable 'stroke'. This also means the model's performance is good and accurate. Therefore, we can proceed to the next steps.
+```{r}
+auc <- performance(prdt, measure = "auc")
+auc <- auc@y.values[[1]]
+auc
+```
+__EXPLANATION__  
+The Area Under the Curve value is > 0.8, thus indicating a good performance model.
+
+# Accuracy testing
+```{r}
+result <- ifelse(prob > 0.5, 1, 0)
+mError <- mean(result != validation$stroke)
+print(paste("Accuracy : ", 1-mError))
+```
+__EXPLANATION__  
+The accuracy of the model is high with a value 0.94 closing to 1.
+
+# Decision Tree Model
+```{r}
+DecisionTree <- rpart(stroke ~. , data = train, method="class", cp = 0.004)
+DecisionTree
+```
+__EXPLANATION__  
+1.) The decision tree model consists 4088 records.  
+2.) The decision tree comprise of 23 nodes.  
+3.) The decision tree has 12 terminal nodes.  
+
+```{r}
+rpart.plot(DecisionTree,cex=0.7)
+```
+__EXPLANATION__  
+1.) If the age < 68, then the chance of not getting a stroke is 2%  
+2.) If the age is >= 68, average glucose level < 162, with age < 74, then the chance of not getting a stroke is 8%  
+3.) If the age is >= 68, average glucose level < 162, with age >= 74, bmi >= 34, then the chance of not getting a stroke is 3%  
+4.) If the age is >= 68, average glucose level < 162, with age >= 74, bmi < 34, bmi < 29, then the chance of not getting a stroke is 15%  
+5.) If the age is >= 68, average glucose level < 162, with age >= 74, bmi < 34, bmi >= 29, then the chance of not getting a stroke is 16%  
+6.) If the age is >= 68, average glucose level < 162, with age >= 74, bmi < 34, bmi >= 29, bmi < 29, smoking status = never smoked, then the chance of not getting a stroke is 30%  
+7.) If the age is >= 68, average glucose level < 162, with age >= 74, bmi < 34, bmi >= 29, bmi < 29, smoking status = smokes, then the chance of getting a stroke is 71%  
+8.) If the age is >= 68, average glucose level >= 162, bmi < 26, then the chance of not getting a stroke is 4%  
+9.) If the age is >= 68, average glucose level >= 162, bmi >= 26, work type = self employed, bmi >= 27, then the chance of not getting a stroke is 13%  
+10.)  If the age is >= 68, average glucose level >= 162, bmi >= 26, work type = self employed, bmi < 27, then the chance of getting a stroke is 57%  
+11.)  If the age is >= 68, average glucose level >= 162, bmi >= 26, work type != self employed, with average glucose level < 239, then the chance of not getting a stroke is 30%  
+12.)  If the age is >= 68, average glucose level >= 162, bmi >= 26, work type != self employed, with average glucose level >= 239, then the chance of getting a stroke is 60%  
+```{r}
+predictionDT <- predict(DecisionTree, validation, type = "class")
+```
+__EXPLANATION__  
+We make predictions of the decision tree model using the testing set.
+
+# Confusion Matrix
+```{r}
+cfm <- table(predictionDT, validation$stroke)
+cfm
+```
+__EXPLANATION__  
+1.) The true positive rate is 3/3+50 = 0.057  
+2.) The true negative rate is 967/967+2 = 0.997  
+3.) The false negative rate is 2/2+967 = 0.002  
+4.) The false positive rate is 50/50+3  = 0.943  
+
+```{r}
+#overall accuracy
+sum(diag(cfm))/sum(cfm)
+#error rate 
+1 - sum(diag(cfm))/sum(cfm)
+```
+__EXPLANATION__  
+1.) The overall accuracy of the prediction is very high with 95% accuracy.  
+2.) The error rate of the prediction corresponds to low percentage of 5%.  
+
+```{r}
+require(MASS)
+exp(coef(logistics))
+```
+
+
+# Summary
+Overall, this logistic regression model fits as the best prediction model with the confusion matrix testing, accuracy testing showing overall satisfying results, decision tree model analysis, training and testing sets, ROC and AUC curve testing giving good results. Hence, it can be said that age plays a big role corresponding to stroke  where each unit in increase of age, increases the likelihood of a person to have stroke by 1.077. It can be seen from the data also, that a person of age > 40 (threshold) are more likely to have a stroke. 
